@@ -1,11 +1,30 @@
 {
   "name": "@kineco-au/bacpac-importer",
   "version": "0.1.0",
-  "description": "Read a SQL Server .bacpac and convert its tables and data to SQLite or Postgres, with no SQL Server and no .NET",
+  "description": "Convert a SQL Server .bacpac to SQLite or Postgres. Reads the export directly, tables and data, with no SQL Server, SqlPackage or .NET.",
+  "keywords": [
+    "bacpac",
+    "dacpac",
+    "sql-server",
+    "mssql",
+    "azure-sql",
+    "sqlite",
+    "postgres",
+    "postgresql",
+    "database",
+    "migration",
+    "converter",
+    "bun"
+  ],
   "license": "MIT",
+  "author": "Kineco",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kineco-au/bacpac-importer.git"
+  },
+  "homepage": "https://github.com/kineco-au/bacpac-importer#readme",
+  "bugs": {
+    "url": "https://github.com/kineco-au/bacpac-importer/issues"
   },
   "engines": {
     "bun": ">=1.3"

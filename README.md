@@ -1,61 +1,108 @@
 # bacpac-importer
 
-Reads a SQL Server `.bacpac` and converts its tables and data to SQLite or
-Postgres. No SQL Server, no SqlPackage and no .NET: the file is decoded directly,
-in TypeScript, on [Bun](https://bun.sh).
+Convert a SQL Server `.bacpac` to SQLite or Postgres.
+
+The export is read directly — no SQL Server to restore it into, no SqlPackage and
+no .NET. Point it at the file and get a database out.
+
+```bash
+bunx @kineco-au/bacpac-importer convert site.bacpac --to sqlite --out site.sqlite
+```
+
+Requires [Bun](https://bun.sh) 1.3 or later.
+
+## Install
 
 ```bash
 bun add @kineco-au/bacpac-importer
-bunx bacpac-importer convert site.bacpac --to sqlite --out site.sqlite
 ```
 
-Or from a checkout:
+## Command line
 
 ```bash
-bun install
-bun src/cli.ts inspect site.bacpac
-bun src/cli.ts convert site.bacpac --to sqlite --out site.sqlite
-bun src/cli.ts convert site.bacpac --to postgres-script --out site.sql   # then: psql -f site.sql
+# What is in the file: tables, row count, server version, anything not convertible
+bacpac-importer inspect site.bacpac
+bacpac-importer inspect site.bacpac --columns
+
+# To a SQLite database file
+bacpac-importer convert site.bacpac --to sqlite --out site.sqlite
+
+# To a SQL script for Postgres, then load it
+bacpac-importer convert site.bacpac --to postgres-script --out site.sql
+psql "$DATABASE_URL" -f site.sql
 ```
 
-A manifest is written beside the output (`<out>.manifest.json`): every table with
-its row count, every column with its original SQL Server type and the type it
-became, what was left out, and any warnings.
+| Option | |
+| --- | --- |
+| `--to <target>` | `sqlite` or `postgres-script` |
+| `--out <path>` | the file to write |
+| `--include <table>` | convert only this table; repeatable. `table` or `schema.table` |
+| `--exclude <table>` | leave this table out; repeatable |
+| `--overwrite` | replace an existing SQLite file |
+| `--schema <name>` | Postgres: put every table in this schema instead of its source schema |
+| `--skip-foreign-keys` | Postgres: leave foreign keys out, for data that does not satisfy them |
+| `--encoding <name>` | the encoding of `char`/`varchar`/`text` values; default `windows-1252` |
+| `--manifest <path>` | where to write the manifest; default `<out>.manifest.json` |
 
-## What it converts
+## What gets converted
 
 Tables and their data, with primary keys, unique constraints, indexes, foreign
-keys, identity columns and the default constraints that translate mechanically
+keys, identity columns, and default values where they translate directly
 (literals, the current time, a new GUID).
 
-Views, procedures, functions, triggers and computed columns are T-SQL and are
-**not** converted. They are listed in the manifest under `skipped`.
+Views, stored procedures, functions, triggers and computed columns are **not**
+converted: they are T-SQL and have no mechanical translation. They are listed in
+the manifest so you know what was left behind.
 
-## As a library
+### The manifest
+
+Every conversion writes a JSON manifest beside its output:
+
+- each table, its name in the target, and its row count
+- each column's original SQL Server type and the type it became
+- the row total the export itself declares, to compare against what was written
+- anything skipped, and any warnings — a default that did not translate, a
+  foreign key pointing at an excluded table
+
+## Library
 
 ```ts
-import { convert, openBacpac, SqliteWriter } from '@kineco-au/bacpac-importer'
+import { convert, SqliteWriter } from '@kineco-au/bacpac-importer'
 
-// Convert
 const manifest = await convert('site.bacpac', new SqliteWriter('site.sqlite'), {
-  exclude: ['umbracoLog'],
-  onProgress: ({ table, rows }) => console.log(table, rows),
+  exclude: ['AuditLog'],
+  onProgress: ({ table, rows, done }) => done && console.log(table, rows),
 })
 
-// Or just read
+console.log(`${manifest.rows} rows in ${manifest.tables.length} tables`)
+```
+
+For Postgres, use `new PostgresScriptWriter('site.sql', { schema: 'public' })`.
+
+### Reading without converting
+
+```ts
+import { openBacpac } from '@kineco-au/bacpac-importer'
+
 const bacpac = await openBacpac('site.bacpac')
-for (const table of bacpac.tables)
+
+for (const table of bacpac.tables) {
+  console.log(table.schema, table.name, table.columns.map((c) => c.name))
   for await (const batch of bacpac.rows(table)) {
-    // batch is an array of rows; a row is an array of values in column order
+    for (const row of batch) {
+      // a row is an array of values, in column order
+    }
   }
+}
+
 await bacpac.close()
 ```
 
-Rows are streamed in batches and never held per table.
+Rows are streamed in batches, so a large table is never held in memory.
 
-### How values arrive
+### How types map
 
-| SQL Server | JavaScript | SQLite | Postgres |
+| SQL Server | In JavaScript | SQLite | Postgres |
 | --- | --- | --- | --- |
 | `tinyint`, `smallint`, `int` | `number` | `INTEGER` | `smallint`, `integer` |
 | `bigint` | `bigint` | `INTEGER` | `bigint` |
@@ -63,23 +110,26 @@ Rows are streamed in batches and never held per table.
 | `decimal`, `numeric`, `money` | `string`, exact | `TEXT` | `numeric(p,s)` |
 | `float`, `real` | `number` | `REAL` | `double precision`, `real` |
 | `uniqueidentifier` | `string`, lower case | `TEXT` | `uuid` |
-| `datetime`, `datetime2`, `smalldatetime` | `string`, ISO 8601, no zone | `TEXT` | `timestamp` |
-| `date`, `time`, `datetimeoffset` | `string`, ISO 8601 | `TEXT` | `date`, `time`, `timestamptz` |
-| `char`, `varchar`, `text` and Unicode forms, `xml` | `string` | `TEXT` | `varchar(n)`, `char(n)`, `text` |
+| `datetime`, `datetime2`, `smalldatetime` | ISO 8601 `string`, no zone | `TEXT` | `timestamp` |
+| `date`, `time`, `datetimeoffset` | ISO 8601 `string` | `TEXT` | `date`, `time`, `timestamptz` |
+| `char`, `varchar`, `text`, their Unicode forms, `xml` | `string` | `TEXT` | `varchar(n)`, `char(n)`, `text` |
 | `binary`, `varbinary`, `image`, `rowversion` | `Uint8Array` | `BLOB` | `bytea` |
 
-When the source database is case-insensitive, SQLite text columns get
-`COLLATE NOCASE` so lookups and unique indexes behave as they did. Postgres has
-no direct equivalent, and the manifest warns about it.
+Decimals are strings so that no precision is lost; `bigint` is a JavaScript
+`bigint` for the same reason.
 
-## Adding a target
+**Case sensitivity.** When the source database is case-insensitive, as most SQL
+Server databases are, SQLite text columns get `COLLATE NOCASE` so lookups and
+unique indexes behave as they did. Postgres has no direct equivalent, so text
+comparisons there are case-sensitive; the manifest carries a warning.
 
-A target is a class that implements `Writer` (`src/writer.ts`). The reader, the
-decoder and `convert` know nothing about which target is in use, so adding MySQL,
-say, touches no existing code:
+### Writing to another database
+
+A target is any class that implements `Writer`. Nothing else in the library knows
+which one is in use:
 
 ```ts
-import { registerTarget, type Writer } from '@kineco-au/bacpac-importer'
+import { convert, registerTarget, type Writer } from '@kineco-au/bacpac-importer'
 
 class MySqlWriter implements Writer {
   readonly target = 'mysql'
@@ -88,78 +138,49 @@ class MySqlWriter implements Writer {
   columnType(column) { /* the column's type in the target */ }
   async begin(database, tables) { /* create the tables */ }
   async beginTable(table) {}
-  async writeRows(table, rows) { /* one batch */ }
+  async writeRows(table, rows) { /* one batch of rows */ }
   async endTable(table) {}
   async end() { /* indexes, foreign keys, sequences */ }
   async abort() { /* release the target after a failure */ }
 }
 
-registerTarget('mysql', ({ out }) => new MySqlWriter(out))   // makes --to mysql work
+await convert('site.bacpac', new MySqlWriter())
+
+// Optional: offer it on the command line as `--to mysql`
+registerTarget('mysql', ({ out }) => new MySqlWriter(out))
 ```
 
-`parseDefault` turns a default constraint into a dialect-neutral value for the
+`parseDefault` reads a column's default into a database-neutral value for your
 writer to render, and `sourceType` gives a column's type as SQL Server declares
-it. `tests/unit/targets.test.ts` holds a complete in-memory writer as a worked
-example.
+it.
 
-## Status of the format
+## Supported types
 
-The row data files in a `.bacpac` have no public specification, so the decoder is
-confirmed against real exports type by type. `VERIFIED_TYPES` lists what has been
-confirmed; the manifest's `unverifiedTypes` names anything a conversion touched
-that has not.
+The row data in a `.bacpac` has no public specification, so each type's decoding
+is confirmed against real exports. If a conversion touches a type that has not
+been confirmed, the manifest names it under `unverifiedTypes` — check those
+columns before relying on them.
 
-- **Confirmed against real exports:** `int`, `bigint`, `bit`, `uniqueidentifier`,
-  `datetime`, `datetime2`, `decimal`/`numeric` (positive values), `nvarchar(n)`,
-  `nvarchar(max)`, `ntext`, `varbinary(max)`
-- **Implemented from documentation, not yet confirmed:** everything else in the
-  table above, including `varchar`, `date`, `time`, `datetimeoffset`, `float` and
-  `money`
-- **Not supported:** `sql_variant`, spatial types, `hierarchyid` — a table using
-  one fails with an error naming the column
+| | Types |
+| --- | --- |
+| **Confirmed** | `int`, `bigint`, `bit`, `uniqueidentifier`, `datetime`, `datetime2`, `decimal` and `numeric` (positive values), `nvarchar(n)`, `nvarchar(max)`, `ntext`, `varbinary(max)` |
+| **Implemented, not yet confirmed** | `tinyint`, `smallint`, `float`, `real`, `money`, `date`, `time`, `datetimeoffset`, `smalldatetime`, `char`, `varchar`, `nchar`, `text`, `binary`, `image`, `xml`, `rowversion` |
+| **Not supported** | `sql_variant`, `geography`, `geometry`, `hierarchyid` — a table using one fails with an error naming the column |
 
-Not built yet: a Postgres writer over a live connection, Node support for the
-SQLite writer beyond a first attempt at `node:sqlite`, and translation of default
-expressions beyond the simple cases.
+## Limitations
 
-## Development
+- Bun only. The package ships TypeScript source and has not been tested on Node.
+- Postgres output is a script for `psql`; there is no writer over a live
+  connection yet.
+- Default values beyond literals, the current time and a new GUID are not
+  translated, and are reported instead.
 
-```bash
-bun run check              # format, lint, types
-bun run test               # unit tests: synthetic .bacpac files built in memory
-bun run test:integration   # the committed demo store, plus any export in fixtures/local/
-```
+## Contributing
 
-The committed fixture is the Umbraco Commerce demo store, an Umbraco 17 database
-of demonstration data (`fixtures/umbraco-commerce-demo-store/`, MIT licensed).
+Issues and pull requests are welcome at
+[github.com/kineco-au/bacpac-importer](https://github.com/kineco-au/bacpac-importer).
+`CONTRIBUTING.md` in the repository covers building, testing and releasing.
 
-Real exports hold personal data. `fixtures/local/` and every other `*.bacpac` are
-ignored by git; put one in `fixtures/local/` to run the structural tests against
-it, and do not commit it.
+## Licence
 
-The Postgres integration tests run when `BACPAC_TEST_POSTGRES` is a connection URL
-and `psql` is installed:
-
-```bash
-docker run -d --rm -p 5439:5432 -e POSTGRES_PASSWORD=test postgres:18-alpine
-BACPAC_TEST_POSTGRES=postgres://postgres:test@localhost:5439/postgres bun run test:integration
-```
-
-## Releasing
-
-Every push to `main` runs the format, lint and type checks and both test suites
-(`.github/workflows/ci.yml`).
-
-Pushing a `v*` tag runs the same build and then publishes to npm
-(`.github/workflows/release.yml`), so treat a tag push as a release, not a
-bookmark:
-
-```bash
-# set "version" in package.json, commit, then
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-The tag must match the version in `package.json` or the release stops before
-publishing. It needs an `NPM_TOKEN` repository secret with publish rights.
-
-The package ships its TypeScript source and runs on Bun.
+MIT
