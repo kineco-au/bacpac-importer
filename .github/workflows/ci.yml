@@ -1,0 +1,70 @@
+# Format, lint, typecheck and both test suites. Called directly by a push to main
+# or a pull request, and by release.yml before it publishes, so a release runs
+# exactly the build that guards main.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  BUN_VERSION: '1.4.2'
+
+jobs:
+  check:
+    name: format, lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+
+  test:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+
+  # The committed demo store, converted to SQLite and loaded into a real Postgres.
+  # The Postgres tests skip themselves when they have no server or no psql, and a
+  # skip is not a pass, so both are provided here and checked for.
+  integration:
+    name: integration (demo store, SQLite and Postgres)
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      BACPAC_TEST_POSTGRES: postgres://postgres:test@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Check psql is available
+        run: psql --version
+      - run: bun run test:integration

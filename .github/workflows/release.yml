@@ -1,0 +1,62 @@
+# A tag push runs the whole CI build, then publishes the package to npm.
+#
+# Needs an NPM_TOKEN secret with publish rights to the package.
+name: Release
+
+# Titles the run with the tag, rather than with the tagged commit's message.
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+
+env:
+  BUN_VERSION: '1.4.2'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Signs npm provenance from this workflow's identity.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      # For the npm CLI, which publishes, and the .npmrc it authenticates with.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: bun install --frozen-lockfile
+
+      - name: Check the tag matches the package version
+        run: |
+          version="$(bun --print 'require("./package.json").version')"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match @kineco-au/bacpac-importer@$version" >&2
+            exit 1
+          fi
+
+      # A version the registry already holds is skipped, so re-running a release is safe.
+      - name: Publish
+        run: |
+          version="$(bun --print 'require("./package.json").version')"
+          if npm view "@kineco-au/bacpac-importer@$version" version >/dev/null 2>&1; then
+            echo "@kineco-au/bacpac-importer@$version is already published; nothing to do"
+            exit 0
+          fi
+          npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

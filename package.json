@@ -1,0 +1,40 @@
+{
+  "name": "@kineco-au/bacpac-importer",
+  "version": "0.1.0",
+  "description": "Read a SQL Server .bacpac and convert its tables and data to SQLite or Postgres, with no SQL Server and no .NET",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kineco-au/bacpac-importer.git"
+  },
+  "engines": {
+    "bun": ">=1.3"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "bacpac-importer": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "biome check . && tsc --noEmit",
+    "fix": "biome check --write .",
+    "test": "bun test tests/unit",
+    "test:integration": "bun test ./tests/integration/*.integration.ts --timeout 300000",
+    "test:all": "bun run test && bun run test:integration"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

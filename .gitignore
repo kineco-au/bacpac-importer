@@ -1,0 +1,7 @@
+node_modules/
+output/
+# Real database exports hold personal data and must never be committed.
+fixtures/local/
+*.bacpac
+# The one exception: public demonstration data, kept as a test fixture.
+!fixtures/umbraco-commerce-demo-store/*.bacpac
