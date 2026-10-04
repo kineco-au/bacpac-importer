@@ -9,10 +9,10 @@ import { sourceType } from './writer.ts'
 
 const USAGE = `Usage:
   bacpac-importer inspect <file.bacpac> [--columns]
-  bacpac-importer convert <file.bacpac> --to sqlite|postgres-script --out <path>
+  bacpac-importer convert <file.bacpac> --to sqlite|postgres-script|mysql-script --out <path>
                           [--include <table>]... [--exclude <table>]...
                           [--overwrite] [--schema <name>] [--skip-foreign-keys]
-                          [--encoding <name>] [--manifest <path>]
+                          [--collation <name>] [--encoding <name>] [--manifest <path>]
 
 The manifest is written beside the output as <out>.manifest.json unless --manifest says otherwise.`
 
@@ -54,6 +54,7 @@ async function main(): Promise<number> {
       overwrite: { type: 'boolean' },
       schema: { type: 'string' },
       'skip-foreign-keys': { type: 'boolean' },
+      collation: { type: 'string' },
       encoding: { type: 'string' },
       manifest: { type: 'string' },
       columns: { type: 'boolean' },
@@ -84,6 +85,7 @@ async function main(): Promise<number> {
     overwrite: values.overwrite,
     schema: values.schema,
     skipForeignKeys: values['skip-foreign-keys'],
+    collation: values.collation,
   })
 
   const manifest = await convert(file, writer, {

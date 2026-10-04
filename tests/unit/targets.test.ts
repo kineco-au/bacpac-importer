@@ -89,7 +89,9 @@ describe('a target is anything that implements Writer', () => {
 
 describe('the target registry', () => {
   test('offers the built-in targets by name', () => {
-    expect(targetNames()).toEqual(expect.arrayContaining(['sqlite', 'postgres-script']))
+    expect(targetNames()).toEqual(
+      expect.arrayContaining(['sqlite', 'postgres-script', 'mysql-script']),
+    )
     expect(createWriter('sqlite', { out: join(dir, 'x.sqlite') }).target).toBe('sqlite')
   })
 
@@ -100,6 +102,6 @@ describe('the target registry', () => {
   })
 
   test('names the choices when asked for one it does not have', () => {
-    expect(() => createWriter('mysql', { out: 'x' })).toThrow('unknown target mysql; available:')
+    expect(() => createWriter('oracle', { out: 'x' })).toThrow('unknown target oracle; available:')
   })
 })

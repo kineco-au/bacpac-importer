@@ -1,11 +1,10 @@
 /** Writes a plain SQL script for Postgres: the schema, then `COPY` blocks, loadable with `psql`. */
 
-import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { createWriteStream, type WriteStream } from 'node:fs'
 import type { Row, Value } from '../bcp.ts'
 import type { Column, Database, Table } from '../schema.ts'
-import { defaultIsTrue, parseDefault, type Writer } from '../writer.ts'
+import { defaultIsTrue, fitIdentifier as fit, parseDefault, type Writer } from '../writer.ts'
 
 export interface PostgresScriptOptions {
   /** Put every table in this schema. By default each keeps its source schema. */
@@ -18,18 +17,8 @@ const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 const MAX_IDENTIFIER_BYTES = 63
 
-/**
- * Postgres truncates an identifier past 63 bytes, silently and so that two long
- * names can become one. A name that long is cut here instead, with a hash of the
- * whole of it, so it stays distinct and is the same on every run.
- */
-export function fitIdentifier(name: string): string {
-  if (Buffer.byteLength(name) <= MAX_IDENTIFIER_BYTES) return name
-  const hash = createHash('sha1').update(name).digest('hex').slice(0, 8)
-  let head = name
-  while (Buffer.byteLength(head) > MAX_IDENTIFIER_BYTES - 9) head = head.slice(0, -1)
-  return `${head}_${hash}`
-}
+/** A name cut to the 63 bytes Postgres allows, rather than silently truncated. */
+export const fitIdentifier = (name: string): string => fit(name, MAX_IDENTIFIER_BYTES)
 
 /** A constraint or index name, shortened if Postgres would have truncated it. */
 const named = (name: string) => quote(fitIdentifier(name))

@@ -1,7 +1,7 @@
 {
   "name": "@kineco-au/bacpac-importer",
-  "version": "0.1.0",
-  "description": "Convert a SQL Server .bacpac to SQLite or Postgres. Reads the export directly, tables and data, with no SQL Server, SqlPackage or .NET.",
+  "version": "1.0.0",
+  "description": "Convert a SQL Server .bacpac to SQLite, Postgres or MySQL. Reads the export directly, tables and data, with no SQL Server, SqlPackage or .NET.",
   "keywords": [
     "bacpac",
     "dacpac",
@@ -11,6 +11,8 @@
     "sqlite",
     "postgres",
     "postgresql",
+    "mysql",
+    "mariadb",
     "database",
     "migration",
     "converter",

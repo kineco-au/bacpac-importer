@@ -17,12 +17,17 @@ Real exports hold personal data. `fixtures/local/` and every other `*.bacpac` ar
 ignored by git; put one in `fixtures/local/` to run the structural tests against
 it, and do not commit it.
 
-The Postgres integration tests run when `BACPAC_TEST_POSTGRES` is a connection URL
-and `psql` is installed, and skip themselves otherwise:
+The Postgres and MySQL integration tests run when `BACPAC_TEST_POSTGRES` or
+`BACPAC_TEST_MYSQL` is a connection URL and the matching client is installed, and
+skip themselves otherwise:
 
 ```bash
 docker run -d --rm -p 5439:5432 -e POSTGRES_PASSWORD=test postgres:18-alpine
-BACPAC_TEST_POSTGRES=postgres://postgres:test@localhost:5439/postgres bun run test:integration
+docker run -d --rm -p 3399:3306 -e MYSQL_ROOT_PASSWORD=test mysql:8.4
+
+BACPAC_TEST_POSTGRES=postgres://postgres:test@localhost:5439/postgres \
+BACPAC_TEST_MYSQL=mysql://root:test@localhost:3399 \
+  bun run test:integration
 ```
 
 ## Confirming a type
@@ -49,7 +54,7 @@ bookmark:
 
 ```bash
 # set "version" in package.json, commit, then
-git tag v0.1.0 && git push origin v0.1.0
+git tag v1.0.0 && git push origin v1.0.0
 ```
 
 The tag must match the version in `package.json` or the release stops before

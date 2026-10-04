@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Column } from '../../src/schema.ts'
-import { defaultIsTrue, parseDefault, sourceType } from '../../src/writer.ts'
+import { defaultIsTrue, fitIdentifier, parseDefault, sourceType } from '../../src/writer.ts'
 
 const column = (type: string, extra: Partial<Column> = {}): Column => ({
   name: 'c',
@@ -48,5 +48,28 @@ describe('sourceType', () => {
     expect(sourceType(column('nvarchar', { isMax: true }))).toBe('nvarchar(max)')
     expect(sourceType(column('decimal', { precision: 38, scale: 6 }))).toBe('decimal(38,6)')
     expect(sourceType(column('datetime2', { scale: 3 }))).toBe('datetime2(3)')
+  })
+})
+
+describe('fitIdentifier', () => {
+  const long = 'a'.repeat(100)
+
+  test('leaves a name the target can hold', () => {
+    expect(fitIdentifier('short', 63)).toBe('short')
+    expect(fitIdentifier('a'.repeat(63), 63)).toBe('a'.repeat(63))
+  })
+
+  test('cuts a longer one to the limit, the same way every time', () => {
+    expect(Buffer.byteLength(fitIdentifier(long, 63))).toBe(63)
+    expect(Buffer.byteLength(fitIdentifier(long, 64))).toBe(64)
+    expect(fitIdentifier(long, 63)).toBe(fitIdentifier(long, 63))
+  })
+
+  test('keeps two long names apart, which truncation would not', () => {
+    expect(fitIdentifier(`${long}_one`, 63)).not.toBe(fitIdentifier(`${long}_two`, 63))
+  })
+
+  test('counts bytes, not characters, so a multi-byte name still fits', () => {
+    expect(Buffer.byteLength(fitIdentifier('é'.repeat(40), 63))).toBeLessThanOrEqual(63)
   })
 })

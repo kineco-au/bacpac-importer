@@ -1,4 +1,5 @@
 /** What a conversion target implements, and what a conversion reports. */
+import { createHash } from 'node:crypto'
 import type { Row } from './bcp.ts'
 import type { Column, Database, SkippedObject, Table } from './schema.ts'
 
@@ -56,6 +57,19 @@ export interface Manifest {
   /** Column types present whose decoding has not been confirmed against real exports. */
   unverifiedTypes: string[]
   warnings: string[]
+}
+
+/**
+ * A name cut to a target's identifier limit. A database that truncates silently
+ * can turn two long names into one, so the cut keeps a hash of the whole name:
+ * the result stays distinct and is the same on every run.
+ */
+export function fitIdentifier(name: string, maxBytes: number): string {
+  if (Buffer.byteLength(name) <= maxBytes) return name
+  const hash = createHash('sha1').update(name).digest('hex').slice(0, 8)
+  let head = name
+  while (Buffer.byteLength(head) > maxBytes - 9) head = head.slice(0, -1)
+  return `${head}_${hash}`
 }
 
 /** A column's type as SQL Server would declare it: `nvarchar(255)`, `decimal(38,6)`. */

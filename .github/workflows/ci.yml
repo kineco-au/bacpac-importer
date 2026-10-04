@@ -39,14 +39,14 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
-  # The committed demo store, converted to SQLite and loaded into a real Postgres.
-  # The Postgres tests skip themselves when they have no server or no psql, and a
-  # skip is not a pass, so both are provided here and checked for.
+  # The committed demo store, converted to SQLite and loaded into a real Postgres
+  # and a real MySQL. Those tests skip themselves when they have no server or no
+  # client, and a skip is not a pass, so all of it is provided here and checked for.
   integration:
-    name: integration (demo store, SQLite and Postgres)
+    name: integration (demo store, SQLite, Postgres and MySQL)
     runs-on: ubuntu-latest
     services:
-      db:
+      postgres:
         image: postgres:18-alpine
         env:
           POSTGRES_PASSWORD: test
@@ -57,14 +57,26 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ptest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     env:
       BACPAC_TEST_POSTGRES: postgres://postgres:test@localhost:5432/postgres
+      BACPAC_TEST_MYSQL: mysql://root:test@localhost:3306
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - name: Check psql is available
-        run: psql --version
+      - name: Check psql and mysql are available
+        run: psql --version && mysql --version
       - run: bun run test:integration

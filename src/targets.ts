@@ -4,6 +4,7 @@
  * the reader, the decoder or `convert` knows which is in use.
  */
 import type { Writer } from './writer.ts'
+import { MysqlScriptWriter } from './writers/mysql-script.ts'
 import { PostgresScriptWriter } from './writers/postgres-script.ts'
 import { SqliteWriter } from './writers/sqlite.ts'
 
@@ -11,8 +12,10 @@ export interface TargetOptions {
   /** Where the output goes: a file path for the built-in targets. */
   out: string
   overwrite?: boolean
+  /** The schema for the Postgres target, and the database for the MySQL one. */
   schema?: string
   skipForeignKeys?: boolean
+  collation?: string
 }
 
 export type TargetFactory = (options: TargetOptions) => Writer
@@ -23,6 +26,11 @@ const targets = new Map<string, TargetFactory>([
     'postgres-script',
     ({ out, schema, skipForeignKeys }) =>
       new PostgresScriptWriter(out, { schema, skipForeignKeys }),
+  ],
+  [
+    'mysql-script',
+    ({ out, schema, skipForeignKeys, collation }) =>
+      new MysqlScriptWriter(out, { database: schema, skipForeignKeys, collation }),
   ],
 ])
 

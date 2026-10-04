@@ -53,10 +53,16 @@ jobs:
       - name: Publish
         run: |
           version="$(bun --print 'require("./package.json").version')"
+          url="https://www.npmjs.com/package/@kineco-au/bacpac-importer/v/$version"
           if npm view "@kineco-au/bacpac-importer@$version" version >/dev/null 2>&1; then
-            echo "@kineco-au/bacpac-importer@$version is already published; nothing to do"
-            exit 0
+            outcome="was already published; nothing to do"
+          else
+            npm publish --access public --provenance
+            outcome="published"
           fi
-          npm publish --access public --provenance
+          # The link goes in the log, as an annotation on the run, and on its summary page.
+          echo "@kineco-au/bacpac-importer@$version $outcome: $url"
+          echo "::notice title=npm::@kineco-au/bacpac-importer@$version $outcome: $url"
+          echo "### [@kineco-au/bacpac-importer@$version]($url) $outcome" >> "$GITHUB_STEP_SUMMARY"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -27,6 +27,7 @@ export {
 export {
   type DefaultValue,
   defaultIsTrue,
+  fitIdentifier,
   type Manifest,
   type ManifestColumn,
   type ManifestTable,
@@ -34,5 +35,6 @@ export {
   sourceType,
   type Writer,
 } from './writer.ts'
+export { type MysqlScriptOptions, MysqlScriptWriter } from './writers/mysql-script.ts'
 export { type PostgresScriptOptions, PostgresScriptWriter } from './writers/postgres-script.ts'
 export { type SqliteDatabase, SqliteWriter, type SqliteWriterOptions } from './writers/sqlite.ts'
